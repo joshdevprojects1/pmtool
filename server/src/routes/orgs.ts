@@ -111,6 +111,17 @@ orgs.post("/", (req, res, next) => {
   }).catch(next);
 });
 
+// Ask the worker to poll all active orgs now instead of waiting for the
+// next scheduled tick. Returns how many orgs were flagged.
+orgs.post("/poll", (req, res, next) => {
+  withWorkspace(req.workspaceId, async (client) => {
+    const { rowCount } = await client.query(
+      `update org_connection set poll_requested_at = now()
+       where status = 'active'`);
+    res.status(202).json({ requested: rowCount ?? 0 });
+  }).catch(next);
+});
+
 // Reset the sync watermark: the next worker poll re-reads the full
 // INITIAL_BACKFILL_DAYS window (dedupe makes re-ingesting safe).
 orgs.post("/:id/resync", (req, res, next) => {

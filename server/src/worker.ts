@@ -106,7 +106,7 @@ async function sfClientFor(org: OrgRow & { oauth_refresh_token_enc?: any }) {
 
 async function tick() {
   const { rows: orgs } = await systemQuery(
-    `select id, workspace_id, label, instance_url, last_synced_at,
+    `select id, workspace_id, auth_mode, label, instance_url, last_synced_at,
             api_budget_daily, api_calls_today, api_calls_date,
             oauth_refresh_token_enc
      from org_connection where status = 'active'`);
@@ -136,6 +136,41 @@ async function tick() {
   }
 }
 
-console.log(`pmtool ingestion worker: polling every ${INTERVAL_MS / 1000}s`);
-tick();
-setInterval(tick, INTERVAL_MS);
+// Main loop: a full tick every INTERVAL_MS, plus an immediate tick whenever
+// the API has stamped poll_requested_at on any active org ("Check now"
+// button). The flag is cleared before polling so requests made mid-poll
+// queue another round rather than being lost.
+const CHECK_MS = 3_000;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function pollRequested(): Promise<boolean> {
+  const { rows } = await systemQuery(
+    `select 1 from org_connection
+     where status = 'active' and poll_requested_at is not null limit 1`);
+  return rows.length > 0;
+}
+
+async function main() {
+  console.log(`pmtool ingestion worker: polling every ${INTERVAL_MS / 1000}s`
+    + ` (on-demand checks every ${CHECK_MS / 1000}s)`);
+  let lastTick = 0;
+  for (;;) {
+    let run = Date.now() - lastTick >= INTERVAL_MS;
+    if (!run) {
+      try { run = await pollRequested(); }
+      catch (err) { console.error("[worker] flag check failed", err); }
+    }
+    if (run) {
+      lastTick = Date.now();
+      try {
+        await systemQuery(
+          `update org_connection set poll_requested_at = null
+           where poll_requested_at is not null`);
+        await tick();
+      } catch (err) { console.error("[worker] tick failed", err); }
+    }
+    await sleep(CHECK_MS);
+  }
+}
+
+main();

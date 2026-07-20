@@ -15,11 +15,20 @@ export function Changes() {
   }
   useEffect(() => { load(false); }, []);
 
+  // Ask the worker to poll Salesforce now, then re-read the ledger a few
+  // times while it works (the poll itself takes a few seconds).
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   async function refresh() {
     setBusy(true);
     try {
-      await load(false);
+      await api("/orgs/poll", { method: "POST" });
+      for (const wait of [3000, 4000, 5000]) {
+        await sleep(wait);
+        await load(false);
+      }
       setChecked(new Date().toLocaleTimeString());
+    } catch {
+      await load(false); // still refresh the view even if the poke failed
     } finally { setBusy(false); }
   }
 
@@ -28,11 +37,11 @@ export function Changes() {
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <h2 style={{ margin: 0 }}>Change ledger</h2>
         <button onClick={refresh} disabled={busy}>
-          {busy ? "Refreshing…" : "Refresh"}
+          {busy ? "Checking org…" : "Check for new changes"}
         </button>
         <span className="muted">
-          {checked ? `checked ${checked} · ` : ""}
-          new org changes are ingested about once a minute
+          {checked ? `last checked ${checked} · ` : ""}
+          also auto-ingests about once a minute
         </span>
       </div>
       {rows.map((ce) => (
