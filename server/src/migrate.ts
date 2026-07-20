@@ -12,6 +12,20 @@ import pg from "pg";
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? "db";
 
 async function main() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    console.error("migrate: DATABASE_URL is NOT set - the process will try "
+      + "localhost and fail. Add it to this service's variables.");
+  } else {
+    try {
+      const u = new URL(url);
+      console.log(`migrate: connecting to ${u.hostname}:${u.port || 5432}`
+        + `/${u.pathname.slice(1)}`);
+    } catch {
+      console.error("migrate: DATABASE_URL is set but not a valid URL "
+        + "(check for quotes or whitespace)");
+    }
+  }
   const client = new pg.Client({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.DATABASE_SSL === "true"
