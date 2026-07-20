@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: pmtool
+      POSTGRES_PASSWORD: pmtool
+      POSTGRES_DB: pmtool
+    ports:
+      - "5433:5432"
+    volumes:
+      - pmtool-data:/var/lib/postgresql/data
+volumes:
+  pmtool-data:
