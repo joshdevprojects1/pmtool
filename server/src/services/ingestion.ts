@@ -46,9 +46,12 @@ export async function pollOrg(
   // Overlap window: back the watermark up 5 minutes so audit-trail write
   // lag can never permanently skip an event (dedupe absorbs the repeats).
   const OVERLAP_MS = 5 * 60 * 1000;
+  // First poll of an org looks back INITIAL_BACKFILL_DAYS (default 7).
+  // SetupAuditTrail retains ~180 days, so up to that is meaningful.
+  const backfillDays = Number(process.env.INITIAL_BACKFILL_DAYS ?? 7);
   const since = org.last_synced_at
     ? soqlDate(new Date(new Date(org.last_synced_at).getTime() - OVERLAP_MS))
-    : soqlDate(new Date(Date.now() - 7 * 24 * 3600 * 1000));
+    : soqlDate(new Date(Date.now() - backfillDays * 24 * 3600 * 1000));
 
   // Poll BOTH sources every tick. SourceMember can be queryable-but-empty
   // on orgs without source tracking (it succeeds with zero rows), so

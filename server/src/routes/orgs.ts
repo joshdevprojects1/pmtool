@@ -111,6 +111,18 @@ orgs.post("/", (req, res, next) => {
   }).catch(next);
 });
 
+// Reset the sync watermark: the next worker poll re-reads the full
+// INITIAL_BACKFILL_DAYS window (dedupe makes re-ingesting safe).
+orgs.post("/:id/resync", (req, res, next) => {
+  withWorkspace(req.workspaceId, async (client) => {
+    const { rowCount } = await client.query(
+      "update org_connection set last_synced_at = null where id = $1",
+      [req.params.id]);
+    if (!rowCount) throw new Problem(404, "Not found", `no org ${req.params.id}`);
+    res.json({ id: req.params.id, resync: true });
+  }).catch(next);
+});
+
 orgs.delete("/:id", (req, res, next) => {
   withWorkspace(req.workspaceId, async (client) => {
     await client.query(
