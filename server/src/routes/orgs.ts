@@ -63,16 +63,21 @@ orgs.post("/", (req, res, next) => {
           + " installed in that org with a run-as user configured?"
           + ` (${err?.body ?? err?.message ?? err})`);
       }
+      // NB: no literal '\x00' in this template string - JS turns that
+      // escape into a real NUL byte, which corrupts the protocol message
+      // ("insufficient data left in message"). Pass the placeholder bytea
+      // as a parameter instead.
       const { rows: [org] } = await client.query(
         `insert into org_connection (workspace_id, sf_org_id, org_type, label,
            instance_url, oauth_refresh_token_enc, auth_mode, auth_note)
          values (current_setting('app.workspace_id')::uuid, $1, $2, $3, $4,
-           '\x00', 'client_credentials', 'client credentials (run-as user)')
+           $5, 'client_credentials', 'client credentials (run-as user)')
          on conflict (workspace_id, sf_org_id) do update set
            auth_mode = 'client_credentials', instance_url = excluded.instance_url,
            status = 'active', auth_note = 'client credentials (reconnected)'
          returning id, label, instance_url, status, auth_mode`,
-        [orgId, org_type ?? "production", label, instance_url]);
+        [orgId, org_type ?? "production", label, instance_url,
+         Buffer.from([0])]);
       res.status(201).json(org);
       return;
     }
