@@ -6,6 +6,9 @@ comes from the architecture doc v0.4; the behavior was validated first by the
 zero-dependency prototype (linking_prototype.py and friends) against a live
 Salesforce org.
 
+Hosting: see DEPLOY.md for the GitHub -> Railway setup (auto-deploy on push,
+migrations applied automatically on boot).
+
 ## Layout
 
     db/         migrations + seed (001 = the validated Postgres schema)
