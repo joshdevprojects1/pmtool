@@ -6,9 +6,19 @@ import { Problem } from "./problem.js";
 const tokens = new Map<string, string>(
   (process.env.API_TOKENS ?? "").split(",").filter(Boolean).map((pair) => {
     const [token, ws] = pair.split(":");
+    if (!token?.trim() || !ws?.trim()) {
+      console.error(`API_TOKENS entry "${pair}" is malformed - expected `
+        + `format: token:workspace-uuid[,token2:uuid2]`);
+      process.exit(1);
+    }
     return [token.trim(), ws.trim()] as [string, string];
   }),
 );
+if (tokens.size === 0) {
+  console.error("API_TOKENS is empty - no request could ever authenticate. "
+    + "Set API_TOKENS=<token>:<workspace-uuid>");
+  process.exit(1);
+}
 
 declare global {
   namespace Express {
