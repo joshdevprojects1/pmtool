@@ -1,27 +1,46 @@
-// Baked in at build time; set VITE_API_TOKEN when building for production.
-const TOKEN = import.meta.env.VITE_API_TOKEN ?? "dev-token";
-
+// Browser requests authenticate with the pmtool_session cookie (set by
+// /v1/auth/login). A 401 anywhere flips the app back to the login screen
+// via the pmtool:unauthorized event.
 export interface Page<T> { data: T[]; next_cursor: string | null; }
 
 export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch("/v1" + path, {
     ...opts,
-    headers: {
-      Authorization: `Bearer ${TOKEN}`,
-      "Content-Type": "application/json",
-      ...(opts.headers ?? {}),
-    },
+    headers: { "Content-Type": "application/json", ...(opts.headers ?? {}) },
   });
+  if (res.status === 401 && !path.startsWith("/auth/")) {
+    window.dispatchEvent(new Event("pmtool:unauthorized"));
+  }
   if (res.status === 204) return undefined as T;
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw body;
   return body as T;
 }
 
+export interface User {
+  id: string; email: string; display_name: string; role: string;
+  sf_usernames: string[];
+}
+export interface Sprint {
+  id: string; project_id: string; name: string; goal: string | null;
+  starts_on: string | null; ends_on: string | null;
+  status: "planned" | "active" | "completed";
+  ticket_count: number; done_count: number;
+}
+export interface SearchResults {
+  tickets: Array<{ id: string; key: string; title: string; status: string }>;
+  features: Array<{ id: string; name: string; status: string }>;
+  components: Array<{ id: string; component_type: string; api_name: string }>;
+}
+export interface Invite {
+  id: string; email: string; role: string; created_at: string;
+  expires_at: string; invited_by_name?: string | null; token?: string;
+}
 export interface FeatureRef { id: string; name: string; }
 export interface Ticket {
   id: string; key: string; title: string; description: string | null;
   status: string; priority: number; assignee_id: string | null;
+  assignee_name: string | null; sprint_id: string | null;
   features: FeatureRef[];
 }
 export interface Signal { kind: string; weight: number; detail: string; }
@@ -55,4 +74,9 @@ export interface ChangeEvent {
   id: string; operation: string; author_username: string | null;
   occurred_at: string; source: string; org: string;
   component_type: string; api_name: string;
+}
+
+export function initials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((w) => w[0]!.toUpperCase()).join("") || "?";
 }

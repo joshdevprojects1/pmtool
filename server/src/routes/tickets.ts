@@ -7,13 +7,15 @@ export const tickets = Router();
 
 const TICKET_SQL = `
   select t.id, p.key || '-' || t.number as key, t.title, t.description,
-         t.status, t.priority, t.assignee_id, t.created_at, t.updated_at,
+         t.status, t.priority, t.assignee_id, t.sprint_id,
+         u.display_name as assignee_name, t.created_at, t.updated_at,
          coalesce((select json_agg(json_build_object('id', f.id, 'name', f.name)
                           order by f.name)
                    from ticket_feature tf
                    join feature f on f.id = tf.feature_id
                    where tf.ticket_id = t.id), '[]'::json) as features
-  from ticket t join project p on p.id = t.project_id`;
+  from ticket t join project p on p.id = t.project_id
+  left join app_user u on u.id = t.assignee_id`;
 
 async function loadTicket(client: Client, id: string) {
   const { rows: [t] } = await client.query(
@@ -46,6 +48,13 @@ tickets.get("/", (req, res, next) => {
         where += ` and t.${f} = $${params.length}`;
       }
     }
+    // sprint_id filter: a uuid, or the literal "backlog" for unassigned.
+    if (req.query.sprint_id === "backlog") {
+      where += " and t.sprint_id is null";
+    } else if (req.query.sprint_id) {
+      params.push(req.query.sprint_id);
+      where += ` and t.sprint_id = $${params.length}`;
+    }
     if (req.query.feature_id) {
       params.push(req.query.feature_id);
       where += ` and exists (select 1 from ticket_feature tf
@@ -67,7 +76,7 @@ tickets.get("/", (req, res, next) => {
 tickets.post("/", (req, res, next) => {
   withWorkspace(req.workspaceId, async (client) => {
     const { project_id, feature_id, feature_ids, title, description,
-            assignee_id } = req.body ?? {};
+            assignee_id, sprint_id } = req.body ?? {};
     if (!title) throw new Problem(422, "Validation failed", "title is required");
     const { rows: [proj] } = await client.query(
       project_id ? "select id from project where id = $1"
@@ -80,12 +89,14 @@ tickets.post("/", (req, res, next) => {
     await checkFeatures(client, proj.id, fids);
     const { rows: [t] } = await client.query(
       `insert into ticket (workspace_id, project_id, number, title,
-         description, assignee_id, started_at, finished_at)
+         description, assignee_id, sprint_id, created_by,
+         started_at, finished_at)
        values (current_setting('app.workspace_id')::uuid, $1,
          (select coalesce(max(number), 0) + 1 from ticket where project_id = $1),
-         $2, $3, $4, now(), now() + interval '7 days')
+         $2, $3, $4, $5, $6, now(), now() + interval '7 days')
        returning id`,
-      [proj.id, title, description ?? null, assignee_id ?? null]);
+      [proj.id, title, description ?? null, assignee_id ?? null,
+       sprint_id ?? null, req.userId ?? null]);
     for (const fid of new Set(fids)) {
       await client.query(
         `insert into ticket_feature (workspace_id, ticket_id, feature_id)
@@ -106,7 +117,7 @@ tickets.patch("/:id", (req, res, next) => {
   withWorkspace(req.workspaceId, async (client) => {
     const t = await loadTicket(client, req.params.id);
     for (const f of ["title", "description", "status", "assignee_id",
-                     "priority"] as const) {
+                     "priority", "sprint_id"] as const) {
       if (f in (req.body ?? {})) {
         await client.query(
           `update ticket set ${f} = $1, updated_at = now() where id = $2`,

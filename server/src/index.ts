@@ -11,6 +11,11 @@ import { changes } from "./routes/changes.js";
 import { components } from "./routes/components.js";
 import { ingest } from "./routes/ingest.js";
 import { orgs, orgsCallback } from "./routes/orgs.js";
+import { authRoutes } from "./routes/authRoutes.js";
+import { users } from "./routes/users.js";
+import { search } from "./routes/search.js";
+import { sprints } from "./routes/sprints.js";
+import { invites } from "./routes/invites.js";
 
 const app = express();
 
@@ -19,7 +24,13 @@ app.use("/v1/ingest", ingest);
 app.use("/v1/orgs/callback", orgsCallback);
 
 app.use(express.json());
+// Login/register/logout/me manage their own credentials.
+app.use("/v1/auth", authRoutes);
 app.use("/v1", auth);
+app.use("/v1/users", users);
+app.use("/v1/search", search);
+app.use("/v1/sprints", sprints);
+app.use("/v1/invites", invites);
 app.use("/v1/tickets", tickets);
 app.use("/v1/suggestions", suggestions);
 app.use("/v1/features", features);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, Feature, Page, Suggestion, Ticket, TicketChange } from "../api";
+import { api, Feature, Page, Sprint, Suggestion, Ticket, TicketChange, User }
+  from "../api";
 import { SuggestionRow } from "./SuggestionRow";
 
 export function TicketView({ id, onChanged }:
@@ -8,6 +9,8 @@ export function TicketView({ id, onChanged }:
   const [changes, setChanges] = useState<TicketChange[]>([]);
   const [sugg, setSugg] = useState<Suggestion[]>([]);
   const [allFeatures, setAllFeatures] = useState<Feature[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
   const [linkId, setLinkId] = useState("");
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
@@ -18,8 +21,11 @@ export function TicketView({ id, onChanged }:
     api<{ data: TicketChange[] }>(`/tickets/${id}/changes`),
     api<Page<Suggestion>>(`/suggestions?status=pending&ticket_id=${id}&limit=100`),
     api<Page<Feature>>("/features"),
-  ]).then(([t, c, s, f]) => {
+    api<{ data: User[] }>("/users"),
+    api<{ data: Sprint[] }>("/sprints"),
+  ]).then(([t, c, s, f, u, sp]) => {
     setTicket(t); setChanges(c.data); setSugg(s.data); setAllFeatures(f.data);
+    setUsers(u.data); setSprints(sp.data);
     setTitle(t.title); setDesc(t.description ?? "");
   });
   useEffect(() => { load(); }, [id]);
@@ -81,6 +87,28 @@ export function TicketView({ id, onChanged }:
                     onChange={(e) => patch({ priority: Number(e.target.value) })}>
               {[1, 2, 3, 4, 5].map((p) => (
                 <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </label>
+          <label className="muted">assignee
+            <select value={ticket.assignee_id ?? ""} style={{ marginLeft: 6 }}
+                    onChange={(e) =>
+                      patch({ assignee_id: e.target.value || null })}>
+              <option value="">unassigned</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.display_name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="muted">sprint
+            <select value={ticket.sprint_id ?? ""} style={{ marginLeft: 6 }}
+                    onChange={(e) =>
+                      patch({ sprint_id: e.target.value || null })}>
+              <option value="">backlog</option>
+              {sprints.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}{s.status === "active" ? " ● active" : ""}
+                </option>
               ))}
             </select>
           </label>
